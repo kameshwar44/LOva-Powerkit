@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Lovable PowerKits",
-  "version": "16.44",
+  "version": "16.50",
   "description": "Lovable PowerKits \u2014 premium productivity tools for the Lovable editor.",
   "permissions": [
     "storage",

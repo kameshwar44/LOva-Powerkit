@@ -7,7 +7,7 @@
     (typeof window !== "undefined" && window.__PK_EXT_BASE__) ||
     (currentScript && currentScript.src ? currentScript.src.replace(/[^/]*$/, "") : "") ||
     "";
-  const EXT_VERSION = "16.44";
+  const EXT_VERSION = "16.50";
   const PAGE_SOURCE = "LOVASIRI_PAGE_PAYLOAD";
   const BRIDGE_SOURCE = "LOVASIRI_EXTENSION_BRIDGE";
 

@@ -2,10 +2,10 @@
    Build identity + API endpoint are injected at package time by scripts/build-extension.mjs. */
 (function () {
   var _cfg = {
-    build_id: "pk_msuznqjs",
-    version: "16.44",
+    build_id: "pk_6a812680c984",
+    version: "16.50",
     api_url: "https://lovable.powerkits.net",
-    issued_at: 1786835394,
+    issued_at: 1786848896,
   };
   try { Object.freeze(_cfg); } catch (_e) {}
   try { self.__PK_BUILD__ = _cfg; } catch (_e) {}
@@ -562,9 +562,7 @@ const PROTECTED_ACTIONS = new Set([
   "proxyFetch",
   "downloadProject",
   "readCookies",
-  // lovableSync is intentionally NOT gated — pageHook must save the Lovable
-  // bearer even while the PowerKits handshake JWT is refreshing, otherwise
-  // Standard Chat intercepts Send with no token and the button appears dead.
+  "lovableSync",
   "activateSidebar",
   "deactivateSidebar",
   "openSidePanel",
@@ -1199,13 +1197,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 function authorizeAndHandleMessage(msg, sender, sendResponse) {
   (async () => {
     let ok = await refreshGateStatus();
-    if (!ok && self.PowerKitsGate && typeof self.PowerKitsGate.ensureToken === "function") {
-      try {
-        const res = await self.PowerKitsGate.ensureToken();
-        ok = !!(res && res.ok);
-        await refreshGateStatus();
-      } catch (_) {}
-    } else if (!ok && self.LovaSiriHandshake) {
+    if (!ok && self.LovaSiriHandshake) {
       const res = await self.LovaSiriHandshake.performHandshake();
       ok = !!(res && res.ok);
       await refreshGateStatus();
@@ -1216,7 +1208,7 @@ function authorizeAndHandleMessage(msg, sender, sendResponse) {
         status: 403,
         data: {
           error: "extension_not_authorized",
-          message: "PowerKits session expired. Re-activate your license, then try Send again.",
+          message: "This copy of the extension is not authorized. Download the official version from your dashboard.",
         },
       });
       return;
@@ -1491,16 +1483,8 @@ function handleAuthorizedMessage(msg, sender, sendResponse) {
     if (Object.keys(updates).length) {
       chrome.storage.local.set(updates, () => {
         console.log("[Background] saved:", Object.keys(updates).join(", "));
-        try {
-          sendResponse({ ok: true, saved: Object.keys(updates) });
-        } catch (_) {}
       });
-      return true;
     }
-    try {
-      sendResponse({ ok: true, saved: [] });
-    } catch (_) {}
-    return;
   }
 
   // Shell credit-free Method send (pageHook blocked Lovable's native /chat).
@@ -1585,7 +1569,6 @@ function handleAuthorizedMessage(msg, sender, sendResponse) {
           send_mode: "native",
           view: "preview",
           x_license_key: stored.ql_license_key || "",
-          session_id: stored.ql_session_id || null,
         };
         console.log("[Background] pkMethodSend →", endpointName, intent, projectId, text.slice(0, 40));
         const resp = await fetch(url, {

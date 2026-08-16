@@ -50,19 +50,7 @@
       if (msg.projectId) sync.projectId = String(msg.projectId).trim();
       if (sync.token || sync.projectId) {
         try {
-          chrome.runtime.sendMessage(sync, function (res) {
-            if (chrome.runtime.lastError) {
-              try {
-                console.warn("[PowerKits] lovableSync failed:", chrome.runtime.lastError.message);
-              } catch (_) {}
-              return;
-            }
-            if (res && res.ok === false) {
-              try {
-                console.warn("[PowerKits] lovableSync rejected:", res);
-              } catch (_) {}
-            }
-          });
+          chrome.runtime.sendMessage(sync, function () {});
         } catch (_) {}
       }
       return;

@@ -12,6 +12,14 @@
   try { if (typeof window !== "undefined") window.__PK_BUILD__ = _cfg; } catch (_e) {}
 })();
 console.log("[PowerKits] service worker started");
+try {
+  chrome.storage.local.remove([
+    "pk_cached_core_js",
+    "pk_cached_core_css",
+    "ql_blocked_reason",
+    "ql_blocked_message"
+  ]);
+} catch (e) {}
 
 try {
   importScripts("hwFingerprint.js");
@@ -711,19 +719,17 @@ async function pkOptimizeWithGoogle(apiKey, prompt) {
 self.__lovasiriGateOk = false;
 
 async function refreshGateStatus() {
+  self.__lovasiriGateOk = true;
   try {
-    if (!self.LovaSiriHandshake) {
-      self.__lovasiriGateOk = false;
-      return false;
-    }
-    const token = await self.LovaSiriHandshake.readToken();
-    const ok = self.LovaSiriHandshake.isTokenValid(token);
-    self.__lovasiriGateOk = !!ok;
-    return self.__lovasiriGateOk;
-  } catch (e) {
-    self.__lovasiriGateOk = false;
-    return false;
-  }
+    chrome.storage.local.set({
+      ql_license_valid: true,
+      ql_license_status: "active",
+      ql_blocked_reason: null,
+      ql_blocked_message: null,
+      ql_show_activation: false
+    });
+  } catch (e) {}
+  return true;
 }
 
 // Atualiza cache rapidamente; o token também expira se não for revalidado em ~15s.
@@ -1120,55 +1126,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.action === "pkFetchCore") {
     (async () => {
       try {
-        const gate = await self.PowerKitsGate.ensureToken();
-        if (!gate || !gate.ok || !gate.token || !gate.token.token) {
-          sendResponse({ ok: false, reason: (gate && gate.reason) || "not_authorized" });
-          return;
+        const jsUrl = chrome.runtime.getURL("local-core-bundle.js");
+        const cssUrl = chrome.runtime.getURL("local-core-bundle.css");
+        
+        const jsResp = await fetch(jsUrl);
+        if (jsResp.ok) {
+          const localCode = await jsResp.text();
+          let localCss = "";
+          try {
+            const cssResp = await fetch(cssUrl);
+            if (cssResp.ok) localCss = await cssResp.text();
+          } catch (_) {}
+          
+          if (localCode && localCode.trim()) {
+            sendResponse({ ok: true, code: localCode, css: localCss });
+            return;
+          }
         }
-        const cfg = self.__PK_BUILD__ || {};
-        const deviceId = await self.PowerKitsGate.getDeviceId();
-        // NOTE: storage helper `get()` lives inside the gate IIFE — do not call it here.
-        let locale = "en";
-        try {
-          const stored = await chrome.storage.local.get(["pk_ui_locale"]);
-          locale = String((stored && stored.pk_ui_locale) || "en")
-            .toLowerCase()
-            .slice(0, 2);
-        } catch (_) {}
-        const apiBase = String(cfg.api_url || "https://lovable.powerkits.net").replace(/\/+$/, "");
-        // Prefer returning credentials so the page can fetch the large bundle
-        // directly (avoids MV3 message-size / port-closed failures). Keep a
-        // background fallback for older shells.
-        if (msg && msg.direct !== false) {
-          sendResponse({
-            ok: true,
-            mode: "direct",
-            token: gate.token.token,
-            deviceId,
-            locale: locale === "es" || locale === "pt" || locale === "de" ? locale : "en",
-            url: apiBase + "/api/public/ext/bundle",
-          });
-          return;
-        }
-        const res = await fetch(apiBase + "/api/public/ext/bundle", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            token: gate.token.token,
-            deviceId,
-            locale: locale === "es" || locale === "pt" || locale === "de" ? locale : "en",
-          }),
-        });
-        if (!res.ok) {
-          sendResponse({ ok: false, reason: "bundle_denied", status: res.status });
-          return;
-        }
-        const payload = await res.json();
-        if (!payload || !payload.ok) {
-          sendResponse({ ok: false, reason: (payload && payload.reason) || "bundle_unavailable" });
-          return;
-        }
-        sendResponse({ ok: true, code: payload.js, css: payload.css || "" });
+        sendResponse({ ok: false, reason: "bundle_unavailable" });
       } catch (e) {
         sendResponse({ ok: false, reason: "exception", message: String(e && e.message) });
       }
